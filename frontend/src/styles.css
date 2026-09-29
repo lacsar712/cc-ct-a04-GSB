@@ -143,3 +143,125 @@ td {
   color: #b91c1c;
   font-weight: 600;
 }
+
+/* 急补 / 普通记号（只读徽标，页面任何地方都不提供勾选） */
+.tag {
+  display: inline-block;
+  padding: 0.12rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.tag.urgent {
+  background: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #fca5a5;
+}
+
+.tag.normal-tag {
+  background: #e8edf5;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+}
+
+.checkline {
+  gap: 0.2rem;
+}
+
+.checkline input.checkbox {
+  width: auto;
+  margin-right: 0.35rem;
+}
+
+.banner.ok {
+  background: #dcfce7;
+  color: #166534;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  margin-top: 1rem;
+}
+
+/* 下一笔将领条 */
+.next-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  padding: 0.85rem 1rem;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+}
+
+/* 双车道：左急补右普通 */
+.lanes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+@media (max-width: 720px) {
+  .lanes {
+    grid-template-columns: 1fr;
+  }
+}
+
+.lane {
+  border-radius: 8px;
+  padding: 0.85rem 1rem;
+  min-height: 120px;
+}
+
+.lane h3 {
+  margin: 0 0 0.6rem;
+  font-size: 1rem;
+}
+
+.urgent-lane {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+}
+
+.normal-lane {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.lane-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: 6px;
+  margin-bottom: 0.4rem;
+  background: #fff;
+  border: 1px solid #e5e9f0;
+}
+
+.lane-item.is-next {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+
+.lane-code {
+  font-weight: 600;
+}
+
+.next-flag {
+  margin-left: auto;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #fff;
+  background: #2563eb;
+  border-radius: 999px;
+  padding: 0.1rem 0.55rem;
+}
+
+.processing-title {
+  margin: 1.25rem 0 0;
+}

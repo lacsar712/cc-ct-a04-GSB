@@ -34,7 +34,9 @@ async function request(path, options = {}) {
   }
   if (!res.ok) {
     const msg = data?.detail || data?.message || `请求失败 (${res.status})`;
-    throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+    const err = new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+    err.status = res.status;
+    throw err;
   }
   return data;
 }
@@ -54,9 +56,26 @@ export function fetchSubmission(id) {
   return request(`/submissions/${id}`);
 }
 
-export function createSubmission(tool_code, offset_um) {
+export function createSubmission(tool_code, offset_um, is_urgent) {
   return request("/submissions", {
     method: "POST",
-    body: JSON.stringify({ tool_code, offset_um: Number(offset_um) }),
+    body: JSON.stringify({
+      tool_code,
+      offset_um: Number(offset_um),
+      is_urgent: Boolean(is_urgent),
+    }),
+  });
+}
+
+// 双车道台数据：急补/普通两车道与下一笔将领全部由后端同一排序函数给出。
+export function fetchLanes() {
+  return request("/desk/lanes");
+}
+
+// 认领下一笔。target_id 传后端给出的 next.id，后端不匹配会拒绝。
+export function claimNext(targetId) {
+  return request("/submissions/claim", {
+    method: "POST",
+    body: JSON.stringify(targetId == null ? {} : { target_id: targetId }),
   });
 }

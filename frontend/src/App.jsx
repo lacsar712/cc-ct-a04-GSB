@@ -1,7 +1,9 @@
-import { createSignal, onMount, Show, For, createEffect } from "solid-js";
+import { createSignal, onMount, onCleanup, Show, For, createEffect } from "solid-js";
 import {
+  claimNext,
   clearSession,
   createSubmission,
+  fetchLanes,
   fetchSubmission,
   fetchSubmissions,
   getUser,
@@ -24,7 +26,12 @@ function readHash() {
   const raw = (location.hash || "#/").replace(/^#/, "") || "/";
   const m = raw.match(/^\/detail\/(\d+)/);
   if (m) return { name: "detail", id: Number(m[1]) };
+  if (raw === "/desk") return { name: "desk", id: null };
   return { name: "home", id: null };
+}
+
+function UrgentTag({ urgent }) {
+  return urgent ? <span class="tag urgent">急补</span> : <span class="tag normal-tag">普通</span>;
 }
 
 function App() {
@@ -33,16 +40,27 @@ function App() {
   const [detail, setDetail] = createSignal(null);
   const [route, setRoute] = createSignal(readHash());
   const [error, setError] = createSignal("");
+  const [notice, setNotice] = createSignal("");
   const [loading, setLoading] = createSignal(false);
+
+  // 双车道台：左右车道、下一笔全部取自后端，不做任何前端排序。
+  const [lanes, setLanes] = createSignal(null);
+  const [claiming, setClaiming] = createSignal(false);
+  let pollTimer = null;
 
   const [loginUser, setLoginUser] = createSignal("machinist");
   const [loginPass, setLoginPass] = createSignal("machine123456");
 
   const [toolCode, setToolCode] = createSignal("");
   const [offsetUm, setOffsetUm] = createSignal("");
+  const [isUrgent, setIsUrgent] = createSignal(false);
 
   function goHome() {
     location.hash = "#/";
+  }
+
+  function goDesk() {
+    location.hash = "#/desk";
   }
 
   function goDetail(id) {
@@ -53,8 +71,7 @@ function App() {
     setLoading(true);
     setError("");
     try {
-      const data = await fetchSubmissions();
-      setRows(data);
+      setRows(await fetchSubmissions());
     } catch (e) {
       setError(e.message);
     } finally {
@@ -75,21 +92,53 @@ function App() {
     }
   }
 
+  async function loadLanes(silent = false) {
+    if (!silent) setLoading(true);
+    setError("");
+    try {
+      setLanes(await fetchLanes());
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      if (!silent) setLoading(false);
+    }
+  }
+
+  function startPolling() {
+    stopPolling();
+    pollTimer = setInterval(() => loadLanes(true), 2500);
+  }
+
+  function stopPolling() {
+    if (pollTimer) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+  }
+
   onMount(() => {
     const onHash = () => setRoute(readHash());
     window.addEventListener("hashchange", onHash);
-    if (user()) {
-      if (route().name === "detail") loadDetail(route().id);
-      else loadRows();
-    }
-    return () => window.removeEventListener("hashchange", onHash);
+    onCleanup(() => {
+      window.removeEventListener("hashchange", onHash);
+      stopPolling();
+    });
   });
 
+  // 首次进入与每次路由切换都在此加载，避免与 onMount 双发请求。
   createEffect(() => {
     const r = route();
     if (!user()) return;
-    if (r.name === "detail" && r.id) loadDetail(r.id);
-    if (r.name === "home") loadRows();
+    if (r.name === "detail" && r.id) {
+      stopPolling();
+      loadDetail(r.id);
+    } else if (r.name === "desk") {
+      loadLanes();
+      startPolling();
+    } else {
+      stopPolling();
+      loadRows();
+    }
   });
 
   async function handleLogin(e) {
@@ -101,10 +150,11 @@ function App() {
         username: data.username,
         role: data.role,
         can_write: data.can_write,
+        can_claim: data.can_claim,
       });
       setUser(getUser());
       goHome();
-      await loadRows();
+      // createEffect 已订阅 user()，setUser 后会自动按当前路由加载数据。
     } catch (err) {
       setError(err.message);
     }
@@ -115,19 +165,44 @@ function App() {
     setUser(null);
     setRows([]);
     setDetail(null);
+    setLanes(null);
+    stopPolling();
     goHome();
   }
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
+    setNotice("");
     try {
-      await createSubmission(toolCode(), offsetUm());
+      await createSubmission(toolCode(), offsetUm(), isUrgent());
       setToolCode("");
       setOffsetUm("");
+      setIsUrgent(false);
+      setNotice("交单成功，急补记号已随单锁死，事后不可改勾。");
       await loadRows();
     } catch (err) {
       setError(err.message);
+    }
+  }
+
+  async function handleClaim() {
+    if (!user()?.can_claim) return;
+    setClaiming(true);
+    setError("");
+    setNotice("");
+    const nxt = lanes()?.next;
+    try {
+      // 只能按后端标出的下一笔认领；并发落败时后端返回 409。
+      const got = await claimNext(nxt ? nxt.id : null);
+      setNotice(`认领成功：${got.tool_code}（${got.is_urgent ? "急补" : "普通"}）已进入复核中。`);
+      await loadLanes(true);
+    } catch (err) {
+      const why = err.status === 409 ? "另一笔已抢先认领（防双领）" : err.message;
+      setError(`认领失败：${why}。请刷新双车道台查看最新下一笔。`);
+      await loadLanes(true);
+    } finally {
+      setClaiming(false);
     }
   }
 
@@ -136,7 +211,9 @@ function App() {
       <header class="topbar">
         <div class="brand">
           <h1>数控刀补复核台</h1>
-          <p class="hint">刀补绝对值不超过十二微米判合格，否则超差。后台认领进程用行锁跳过已占行领取待复核。</p>
+          <p class="hint">
+            急补车道压过普通车道，同车道按刀具编号升序；下一笔将领由后端统一排序函数给出，页面不私自另算。
+          </p>
         </div>
         <Show when={user()}>
           <nav class="topnav">
@@ -150,12 +227,25 @@ function App() {
             >
               复核总览
             </a>
+            <a
+              href="#/desk"
+              class={route().name === "desk" ? "active" : ""}
+              onClick={(e) => {
+                e.preventDefault();
+                goDesk();
+              }}
+            >
+              双车道台
+            </a>
           </nav>
         </Show>
       </header>
 
       <Show when={error()}>
         <div class="banner error">{error()}</div>
+      </Show>
+      <Show when={notice()}>
+        <div class="banner ok">{notice()}</div>
       </Show>
 
       <Show
@@ -181,13 +271,14 @@ function App() {
               </label>
               <button type="submit">进入系统</button>
             </form>
-            <p class="hint">操作员 machinist / machine123456；复核员 auditor / audit123456（只读）</p>
+            <p class="hint">操作员 machinist / machine123456（可交单、交单时可勾急补）；复核员 auditor / audit123456（只能看记号与认领）</p>
           </section>
         }
       >
         <section class="card toolbar">
           <div>
             当前用户：<strong>{user().username}</strong>（{roleLabel[user().role] || user().role}）
+            ｜ {user().can_write ? "可交单（交单时勾急补）" : "只读记号、可认领，不能交单/勾记号"}
           </div>
           <button type="button" class="ghost" onClick={handleLogout}>
             退出
@@ -217,6 +308,18 @@ function App() {
                     required
                   />
                 </label>
+                <label class="checkline">
+                  <span>
+                    <input
+                      type="checkbox"
+                      class="checkbox"
+                      checked={isUrgent()}
+                      onChange={(e) => setIsUrgent(e.currentTarget.checked)}
+                    />
+                    急补记号
+                  </span>
+                  <small class="hint">仅交单此刻可勾，交后随单锁死，事后改勾无效</small>
+                </label>
                 <button type="submit">提交待复核</button>
               </form>
             </section>
@@ -224,7 +327,7 @@ function App() {
 
           <section class="card">
             <div class="toolbar">
-              <h2>复核列表</h2>
+              <h2>复核总览（只显示记号，不可在此勾选）</h2>
               <button type="button" class="ghost" onClick={loadRows} disabled={loading()}>
                 {loading() ? "刷新中…" : "刷新"}
               </button>
@@ -232,10 +335,12 @@ function App() {
             <table>
               <thead>
                 <tr>
+                  <th>车道</th>
                   <th>刀具</th>
                   <th>刀补 µm</th>
                   <th>状态</th>
                   <th>结论</th>
+                  <th>认领人</th>
                   <th>提交时间</th>
                   <th></th>
                 </tr>
@@ -244,12 +349,16 @@ function App() {
                 <For each={rows()}>
                   {(row) => (
                     <tr>
+                      <td>
+                        <UrgentTag urgent={row.is_urgent} />
+                      </td>
                       <td>{row.tool_code}</td>
                       <td>{row.offset_um}</td>
                       <td>{statusLabel[row.status] || row.status}</td>
                       <td class={row.verdict === "合格" ? "pass" : row.verdict === "超差" ? "fail" : ""}>
                         {row.verdict || "—"}
                       </td>
+                      <td>{row.claimed_by || "—"}</td>
                       <td>{new Date(row.created_at).toLocaleString()}</td>
                       <td>
                         <button type="button" class="ghost" onClick={() => goDetail(row.id)}>
@@ -267,6 +376,112 @@ function App() {
           </section>
         </Show>
 
+        <Show when={route().name === "desk"}>
+          <section class="card">
+            <div class="toolbar">
+              <h2>双车道台</h2>
+              <button type="button" class="ghost" onClick={() => loadLanes()} disabled={loading()}>
+                {loading() ? "刷新中…" : "刷新"}
+              </button>
+            </div>
+
+            <div class="next-bar">
+              <Show
+                when={lanes()?.next}
+                fallback={<span class="hint">候审队列已空，暂无下一笔。</span>}
+              >
+                {(n) => (
+                  <span>
+                    下一笔将领：
+                    <UrgentTag urgent={n().is_urgent} />
+                    <strong> {n().tool_code}</strong>（刀补 {n().offset_um} µm）
+                    —— 急补车道清空后才轮到普通车道，同车道按编号升序。
+                  </span>
+                )}
+              </Show>
+              <Show when={user().can_claim}>
+                <button
+                  type="button"
+                  onClick={handleClaim}
+                  disabled={claiming() || !lanes()?.next}
+                >
+                  {claiming() ? "认领中…" : "认领下一笔"}
+                </button>
+              </Show>
+              <Show when={!user().can_claim}>
+                <span class="hint">操作员账号只能查看，认领由复核员执行。</span>
+              </Show>
+            </div>
+
+            <div class="lanes">
+              <div class="lane urgent-lane">
+                <h3>急补车道（左 · 优先认领）</h3>
+                <For each={lanes()?.urgent || []}>
+                  {(row) => (
+                    <div class={"lane-item" + (lanes()?.next?.id === row.id ? " is-next" : "")}>
+                      <span class="lane-code">{row.tool_code}</span>
+                      <span class="hint">{row.offset_um} µm</span>
+                      <Show when={lanes()?.next?.id === row.id}>
+                        <span class="next-flag">下一笔将领</span>
+                      </Show>
+                    </div>
+                  )}
+                </For>
+                <Show when={!(lanes()?.urgent || []).length}>
+                  <p class="hint">急补车道空</p>
+                </Show>
+              </div>
+
+              <div class="lane normal-lane">
+                <h3>普通车道（右）</h3>
+                <For each={lanes()?.normal || []}>
+                  {(row) => (
+                    <div class={"lane-item" + (lanes()?.next?.id === row.id ? " is-next" : "")}>
+                      <span class="lane-code">{row.tool_code}</span>
+                      <span class="hint">{row.offset_um} µm</span>
+                      <Show when={lanes()?.next?.id === row.id}>
+                        <span class="next-flag">下一笔将领</span>
+                      </Show>
+                    </div>
+                  )}
+                </For>
+                <Show when={!(lanes()?.normal || []).length}>
+                  <p class="hint">普通车道空</p>
+                </Show>
+              </div>
+            </div>
+
+            <h3 class="processing-title">复核中（已被认领）</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>车道</th>
+                  <th>刀具</th>
+                  <th>刀补 µm</th>
+                  <th>认领人</th>
+                </tr>
+              </thead>
+              <tbody>
+                <For each={lanes()?.processing || []}>
+                  {(row) => (
+                    <tr>
+                      <td>
+                        <UrgentTag urgent={row.is_urgent} />
+                      </td>
+                      <td>{row.tool_code}</td>
+                      <td>{row.offset_um}</td>
+                      <td>{row.claimed_by || "—"}</td>
+                    </tr>
+                  )}
+                </For>
+              </tbody>
+            </table>
+            <Show when={!(lanes()?.processing || []).length}>
+              <p class="hint">暂无复核中的单子</p>
+            </Show>
+          </section>
+        </Show>
+
         <Show when={route().name === "detail"}>
           <section class="card">
             <div class="toolbar">
@@ -278,6 +493,10 @@ function App() {
             <Show when={detail()} fallback={<p class="hint">{loading() ? "加载中…" : "未找到记录"}</p>}>
               {(d) => (
                 <div class="detail-grid">
+                  <p>
+                    车道记号：<UrgentTag urgent={d().is_urgent} />
+                    <small class="hint">（交单时锁定，不可改勾）</small>
+                  </p>
                   <p>编号：{d().id}</p>
                   <p>刀具：{d().tool_code}</p>
                   <p>刀补 µm：{d().offset_um}</p>
@@ -285,6 +504,7 @@ function App() {
                   <p class={d().verdict === "合格" ? "pass" : d().verdict === "超差" ? "fail" : ""}>
                     结论：{d().verdict || "—"}
                   </p>
+                  <p>认领人：{d().claimed_by || "—"}</p>
                   <p>提交时间：{new Date(d().created_at).toLocaleString()}</p>
                   <p>
                     复核时间：

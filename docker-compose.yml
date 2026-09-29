@@ -43,6 +43,9 @@ services:
       POSTGRES_HOST: db
       POSTGRES_PORT: "5432"
       DJANGO_SECRET_KEY: cnc-offset-desk-dev-secret
+      # 候审单由复核员在双车道台人工认领；worker 只负责把「复核中」收口出结论。
+      WORKER_AUTO_CLAIM: "0"
+      WORKER_POLL_SECONDS: "1"
     depends_on:
       db:
         condition: service_healthy

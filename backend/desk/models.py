@@ -17,6 +17,10 @@ class User(AbstractUser):
     def can_write(self) -> bool:
         return self.role == self.Role.MACHINIST
 
+    @property
+    def can_claim(self) -> bool:
+        return self.role == self.Role.AUDITOR
+
 
 class OffsetSubmission(models.Model):
     class Status(models.TextChoices):
@@ -30,6 +34,8 @@ class OffsetSubmission(models.Model):
 
     tool_code = models.CharField(max_length=32, db_index=True)
     offset_um = models.IntegerField()
+    # 急补记号：交单时勾选即随单锁死，系统不提供任何事后改勾入口。
+    is_urgent = models.BooleanField(default=False, db_index=True, editable=False)
     status = models.CharField(
         max_length=16,
         choices=Status.choices,
@@ -48,6 +54,14 @@ class OffsetSubmission(models.Model):
         null=True,
         blank=True,
         related_name="submissions",
+    )
+    # 谁把单子从待复核领进了复核中（双认领竞态的归属凭证）。
+    claimed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="claimed_submissions",
     )
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     reviewed_at = models.DateTimeField(null=True, blank=True)
