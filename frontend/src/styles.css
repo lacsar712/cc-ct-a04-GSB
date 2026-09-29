@@ -143,3 +143,156 @@ td {
   color: #b91c1c;
   font-weight: 600;
 }
+
+/* 急补记号：随单锁死，全程同一视觉 */
+.badge {
+  display: inline-block;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.badge.urgent {
+  background: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #fca5a5;
+}
+
+.badge.normal {
+  background: #e0e7ff;
+  color: #3730a3;
+  border: 1px solid #a5b4fc;
+}
+
+.urgent-text {
+  color: #b91c1c;
+}
+
+.checkbox-line {
+  gap: 0.2rem;
+}
+
+.checkbox-line input[type="checkbox"] {
+  width: auto;
+  margin-right: 0.35rem;
+}
+
+.row-urgent {
+  background: #fff7f7;
+}
+
+/* 双车道台：左急补、右普通 */
+.lanes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+@media (max-width: 720px) {
+  .lanes {
+    grid-template-columns: 1fr;
+  }
+}
+
+.lane {
+  margin-top: 0;
+  border-top: 4px solid #c5ceda;
+}
+
+.lane-urgent {
+  border-top-color: #dc2626;
+}
+
+.lane-normal {
+  border-top-color: #4f46e5;
+}
+
+.lane h3 {
+  margin: 0 0 0.5rem;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.lane .count {
+  font-size: 0.82rem;
+  font-weight: 400;
+  color: #5a6478;
+}
+
+.queue-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.queue-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid #e5e9f0;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.queue-list li.next {
+  border-color: #2563eb;
+  background: #eff6ff;
+  box-shadow: 0 0 0 1px #2563eb inset;
+}
+
+.queue-main {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 600;
+}
+
+.queue-sub {
+  color: #5a6478;
+  font-size: 0.88rem;
+}
+
+.next-tag {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: #fff;
+  background: #2563eb;
+  border-radius: 4px;
+  padding: 0.08rem 0.4rem;
+}
+
+.next-card .next-body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.next-tool {
+  font-size: 1.05rem;
+  margin-left: 0.3rem;
+}
+
+button.verdict {
+  padding: 0.35rem 0.8rem;
+  margin-right: 0.4rem;
+}
+
+button.pass-btn {
+  background: #15803d;
+}
+
+button.fail-btn {
+  background: #b91c1c;
+}

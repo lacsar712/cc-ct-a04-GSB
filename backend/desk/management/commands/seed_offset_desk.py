@@ -27,20 +27,26 @@ class Command(BaseCommand):
         )
 
         now = timezone.now()
+        # (刀具, 刀补, 结论, 急补记号, 状态)
         seeds = [
-            ("T01", 5, OffsetSubmission.Verdict.PASS),
-            ("T09", 20, OffsetSubmission.Verdict.FAIL),
+            ("T01", 5, OffsetSubmission.Verdict.PASS, False, OffsetSubmission.Status.DONE),
+            ("T09", 20, OffsetSubmission.Verdict.FAIL, False, OffsetSubmission.Status.DONE),
+            ("甲刀", 6, "", True, OffsetSubmission.Status.PENDING),
+            ("乙刀", 9, "", False, OffsetSubmission.Status.PENDING),
         ]
-        for tool_code, offset_um, verdict in seeds:
+        for tool_code, offset_um, verdict, is_urgent, status in seeds:
+            defaults = {
+                "status": status,
+                "is_urgent": is_urgent,
+                "submitted_by": machinist,
+                "claimed_by": None,
+                "verdict": verdict if status == OffsetSubmission.Status.DONE else "",
+                "reviewed_at": now if status == OffsetSubmission.Status.DONE else None,
+            }
             OffsetSubmission.objects.update_or_create(
                 tool_code=tool_code,
                 offset_um=offset_um,
-                defaults={
-                    "status": OffsetSubmission.Status.DONE,
-                    "verdict": verdict,
-                    "submitted_by": machinist,
-                    "reviewed_at": now,
-                },
+                defaults=defaults,
             )
 
         self.stdout.write(self.style.SUCCESS("seed_offset_desk 完成"))

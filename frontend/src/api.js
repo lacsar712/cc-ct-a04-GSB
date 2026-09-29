@@ -54,9 +54,24 @@ export function fetchSubmission(id) {
   return request(`/submissions/${id}`);
 }
 
-export function createSubmission(tool_code, offset_um) {
+export function createSubmission(tool_code, offset_um, is_urgent = false) {
   return request("/submissions", {
     method: "POST",
-    body: JSON.stringify({ tool_code, offset_um: Number(offset_um) }),
+    body: JSON.stringify({ tool_code, offset_um: Number(offset_um), is_urgent }),
+  });
+}
+
+export function fetchDeskQueue() {
+  return request("/desk/queue");
+}
+
+export function claimNext() {
+  return request("/desk/claim", { method: "POST" });
+}
+
+export function reviewSubmission(id, verdict) {
+  return request(`/desk/review/${id}`, {
+    method: "POST",
+    body: JSON.stringify({ verdict }),
   });
 }

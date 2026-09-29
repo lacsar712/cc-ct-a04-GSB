@@ -30,6 +30,8 @@ class OffsetSubmission(models.Model):
 
     tool_code = models.CharField(max_length=32, db_index=True)
     offset_um = models.IntegerField()
+    # 急补记号：操作员交单时勾选即随单锁死，事后改勾无效
+    is_urgent = models.BooleanField(default=False, db_index=True)
     status = models.CharField(
         max_length=16,
         choices=Status.choices,
@@ -48,6 +50,13 @@ class OffsetSubmission(models.Model):
         null=True,
         blank=True,
         related_name="submissions",
+    )
+    claimed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="claimed_submissions",
     )
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     reviewed_at = models.DateTimeField(null=True, blank=True)

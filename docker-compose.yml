@@ -32,23 +32,6 @@ services:
       db:
         condition: service_healthy
 
-  worker:
-    build:
-      context: ./backend
-    command: ["python", "desk/worker.py"]
-    environment:
-      POSTGRES_DB: cncoffset
-      POSTGRES_USER: app
-      POSTGRES_PASSWORD: app
-      POSTGRES_HOST: db
-      POSTGRES_PORT: "5432"
-      DJANGO_SECRET_KEY: cnc-offset-desk-dev-secret
-    depends_on:
-      db:
-        condition: service_healthy
-      backend:
-        condition: service_started
-
   frontend:
     build:
       context: ./frontend
